@@ -125,16 +125,3 @@ auto-py-to-exe
 ## 📄 License
 
 MIT License — feel free to modify and distribute.
-
----
-
-## 👨‍💻 Author
-
-Developed by **\[Mohammed AL-hassan]** — Modern media management made simple.
-
-```
-
----
-
-Do you want me to also make you a **shorter “GitHub-friendly” version** with badges and screenshots so it looks professional on your repository page? That would make EchoMux look like a polished open-source app.
-```
