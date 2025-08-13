@@ -1,0 +1,2 @@
+[console_scripts]
+echomux = echomux.main:main

@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: EchoMux
+Version: 1.0.0
+Summary: Multi-Track Video Remuxer & Media Manager
+Author: Mohammed Al-hassan
+Requires-Dist: PyQt6>=6.0.0
+Requires-Dist: psutil>=5.8.0
+Dynamic: author
+Dynamic: requires-dist
+Dynamic: summary

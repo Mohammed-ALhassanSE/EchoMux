@@ -1,0 +1,10 @@
+# Ignore the test folder
+test/
+
+# Ignore temporary files
+*.log
+*.tmp
+
+# Ignore build output
+dist/
+build/
