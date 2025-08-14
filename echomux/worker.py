@@ -150,7 +150,23 @@ class FFmpegWorker(QThread):
 
     def build_merge_audio_cmd(self, video_file: MediaFile, matching_audio: List[str], languages: List[str]) -> List[str]:
         ffmpeg_path = get_ffmpeg_path()
-        output_path = self.job.output_directory / f"{video_file.path.stem}_merged.mp4"
+
+        # --- Automatic Format Detection ---
+        has_srt_subtitles = False
+        if video_file.subtitle_tracks:
+            for sub_track in video_file.subtitle_tracks:
+                if sub_track.get('codec_name') == 'subrip':
+                    has_srt_subtitles = True
+                    break
+
+        if has_srt_subtitles:
+            output_extension = ".mkv"
+            subtitle_codec = "copy"
+        else:
+            output_extension = ".mp4"
+            subtitle_codec = "mov_text"
+
+        output_path = self.job.output_directory / f"{video_file.path.stem}_merged{output_extension}"
 
         cmd = [ffmpeg_path, '-y', '-i', str(video_file.path)]
         for audio_path in matching_audio:
@@ -169,7 +185,7 @@ class FFmpegWorker(QThread):
             cmd.extend(['-map', f'{i + 1}:a'])
 
         # --- Codec Configuration ---
-        cmd.extend(['-c:v', 'copy', '-c:s', 'mov_text', '-c:d', 'copy'])
+        cmd.extend(['-c:v', 'copy', f'-c:s', subtitle_codec, '-c:d', 'copy'])
 
         if self.job.settings.get('preserve_original', True):
              for i in range(num_original_audio):
