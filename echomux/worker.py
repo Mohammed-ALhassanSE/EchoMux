@@ -150,27 +150,42 @@ class FFmpegWorker(QThread):
 
     def build_merge_audio_cmd(self, video_file: MediaFile, matching_audio: List[str], languages: List[str]) -> List[str]:
         ffmpeg_path = get_ffmpeg_path()
-        output_path = self.job.output_directory / f"{video_file.path.stem}_merged.mkv"
+        output_path = self.job.output_directory / f"{video_file.path.stem}_merged.mp4"
         cmd = [ffmpeg_path, '-i', str(video_file.path)]
         for audio_path in matching_audio:
             cmd.extend(['-i', str(audio_path)])
 
+        # --- Stream Mapping ---
+        # Map video, subtitle, and data streams from the original video
+        cmd.extend(['-map', '0:v', '-map', '0:s?', '-map', '0:d?'])
+
+        # Map audio streams
+        num_original_audio = 0
         if self.job.settings.get('preserve_original', True):
-            # Map all streams from video, but specifically exclude its audio streams
-            cmd.extend(['-map', '0', '-map', '-0:a'])
-        else:
-            # Map only video and subtitle streams
-            cmd.extend(['-map', '0:v', '-map', '0:s?'])
+            cmd.extend(['-map', '0:a?'])
+            # We need to know how many audio streams there are to offset the new stream indices
+            if video_file.audio_tracks:
+                 num_original_audio = len(video_file.audio_tracks)
 
-        # Map the new audio streams
         for i in range(len(matching_audio)):
-            cmd.extend(['-map', f'{i + 1}:a'])
+            cmd.extend(['-map', f'{i + 1}:a:0'])
 
-        # Add language metadata to the new audio streams
-        for i, lang in enumerate(languages):
-            cmd.extend([f'-metadata:s:a:{i}', f'language={lang}'])
+        # --- Codec Configuration ---
+        cmd.extend(['-c:v', 'copy', '-c:s', 'copy', '-c:d', 'copy'])
 
-        cmd.extend(['-c', 'copy', '-y', str(output_path)])
+        if self.job.settings.get('preserve_original', True):
+             for i in range(num_original_audio):
+                 cmd.extend([f'-c:a:{i}', 'copy'])
+
+        for i in range(len(matching_audio)):
+            # The index for the new audio stream codec needs to be offset
+            # by the number of original audio streams that are being kept.
+            stream_index = num_original_audio + i
+            cmd.extend([f'-c:a:{stream_index}', 'aac'])
+            cmd.extend([f'-metadata:s:a:{stream_index}', f'language={languages[i]}'])
+
+        # Add shortest flag and output path
+        cmd.extend(['-shortest', '-y', str(output_path)])
         return cmd
 
     def merge_audio(self):
