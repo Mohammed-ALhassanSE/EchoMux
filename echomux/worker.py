@@ -169,7 +169,7 @@ class FFmpegWorker(QThread):
             cmd.extend(['-map', f'{i + 1}:a'])
 
         # --- Codec Configuration ---
-        cmd.extend(['-c:v', 'copy', '-c:s', 'copy', '-c:d', 'copy'])
+        cmd.extend(['-c:v', 'copy', '-c:s', 'mov_text', '-c:d', 'copy'])
 
         if self.job.settings.get('preserve_original', True):
              for i in range(num_original_audio):
