@@ -60,9 +60,12 @@ class AudioMergingTab(QWidget):
         self.output_path.setPlaceholderText("Select output directory...")
         self.browse_output_btn = MaterialButton("Browse")
         self.browse_output_btn.clicked.connect(self.browse_output)
+        self.preserve_original = QCheckBox("Preserve original audio track(s)")
+        self.preserve_original.setChecked(True)
         settings_layout.addWidget(QLabel("Output Directory:"), 0, 0)
         settings_layout.addWidget(self.output_path, 0, 1)
         settings_layout.addWidget(self.browse_output_btn, 0, 2)
+        settings_layout.addWidget(self.preserve_original, 1, 0, 1, 3)
         layout.addWidget(settings_group)
 
         # Preview section
@@ -241,6 +244,7 @@ class AudioMergingTab(QWidget):
             settings={
                 'audio_files': audio_files,
                 'languages': languages,
+                'preserve_original': self.preserve_original.isChecked()
             }
         )
         self.worker = FFmpegWorker(job)

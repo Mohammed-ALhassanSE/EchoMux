@@ -1,4 +1,5 @@
 import re
+import string
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -151,31 +152,79 @@ class FFmpegWorker(QThread):
     def build_merge_audio_cmd(self, video_file: MediaFile, matching_audio: List[str], languages: List[str]) -> List[str]:
         ffmpeg_path = get_ffmpeg_path()
         output_path = self.job.output_directory / f"{video_file.path.stem}_merged.mp4"
-        cmd = [ffmpeg_path, '-i', str(video_file.path)]
+
+        cmd = [ffmpeg_path, '-y', '-i', str(video_file.path)]
         for audio_path in matching_audio:
             cmd.extend(['-i', str(audio_path)])
 
-        # Map video streams from the first input
-        cmd.extend(['-map', '0:v'])
+        # --- Stream Mapping ---
+        cmd.extend(['-map', '0:v', '-map', '0:s?', '-map', '0:d?'])
 
-        # Map subtitle and data streams from the first input
-        cmd.extend(['-map', '0:s?', '-map', '0:d?'])
+        num_original_audio = 0
+        if self.job.settings.get('preserve_original', True):
+            cmd.extend(['-map', '0:a?'])
+            if video_file.audio_tracks:
+                 num_original_audio = len(video_file.audio_tracks)
 
-        # Map the new audio streams
         for i in range(len(matching_audio)):
             cmd.extend(['-map', f'{i + 1}:a'])
 
-        # Set codecs
+        # --- Codec Configuration ---
         cmd.extend(['-c:v', 'copy', '-c:s', 'copy', '-c:d', 'copy'])
-        cmd.extend(['-c:a', 'aac'])
 
-        # Add language metadata to the new audio streams
-        for i, lang in enumerate(languages):
-            cmd.extend([f'-metadata:s:a:{i}', f'language={lang}'])
+        if self.job.settings.get('preserve_original', True):
+             for i in range(num_original_audio):
+                 cmd.extend([f'-c:a:{i}', 'copy'])
 
-        # Add shortest flag and output path
-        cmd.extend(['-shortest', '-y', str(output_path)])
+        for i in range(len(matching_audio)):
+            stream_index = num_original_audio + i
+            cmd.extend([f'-c:a:{stream_index}', 'aac', f'-b:a:{stream_index}', '192k'])
+            cmd.extend([f'-metadata:s:a:{stream_index}', f'language={languages[i]}'])
+
+        # --- Global Metadata & Output ---
+        cmd.extend(['-metadata', 'comment=Merged with EchoMux'])
+        cmd.extend(['-shortest', str(output_path)])
+
         return cmd
+
+    def _fuzzy_match(self, name1: str, name2: str, threshold: float = 0.7) -> bool:
+        """Simple fuzzy matching for filenames."""
+        def normalize(s):
+            translator = str.maketrans('', '', string.punctuation + string.whitespace)
+            return s.translate(translator).lower()
+
+        norm1, norm2 = normalize(name1), normalize(name2)
+
+        if not norm1 or not norm2:
+            return False
+
+        shorter, longer = (norm1, norm2) if len(norm1) <= len(norm2) else (norm2, norm1)
+        matches = sum(1 for c in shorter if c in longer)
+        similarity = matches / len(shorter)
+
+        return similarity >= threshold
+
+    def _find_matching_audio(self, video_file: MediaFile, audio_files: List[str],
+                           languages: List[str]) -> Tuple[List[str], List[str]]:
+        """Find audio files that match the video file based on filename similarity."""
+        matching_audio = []
+        matching_languages = []
+
+        video_stem = video_file.path.stem.lower()
+
+        for audio_path, lang in zip(audio_files, languages):
+            audio_path_obj = Path(audio_path)
+            audio_stem = audio_path_obj.stem.lower()
+
+            if (video_stem in audio_stem or
+                audio_stem in video_stem or
+                self._fuzzy_match(video_stem, audio_stem)):
+
+                if audio_path_obj.exists():
+                    matching_audio.append(audio_path)
+                    matching_languages.append(lang)
+
+        return matching_audio, matching_languages
 
     def merge_audio(self):
         total_files = len(self.job.input_files)
@@ -188,13 +237,9 @@ class FFmpegWorker(QThread):
             audio_files = self.job.settings.get('audio_files', [])
             languages = self.job.settings.get('languages', [])
 
-            matching_audio = []
-            matching_languages = []
-            for audio_path, lang in zip(audio_files, languages):
-                if video_file.path.stem.lower() in Path(audio_path).stem.lower() or \
-                   Path(audio_path).stem.lower() in video_file.path.stem.lower():
-                    matching_audio.append(audio_path)
-                    matching_languages.append(lang)
+            matching_audio, matching_languages = self._find_matching_audio(
+                video_file, audio_files, languages
+            )
 
             if not matching_audio:
                 self.status_updated.emit(f"No matching audio found for {video_file.filename}")
