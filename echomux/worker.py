@@ -37,7 +37,7 @@ class ProcessingJob:
 class FFmpegWorker(QThread):
     progress_updated = pyqtSignal(int)
     status_updated = pyqtSignal(str)
-    job_completed = pyqtSignal(str, bool)
+    job_completed = pyqtSignal(str, bool, str, str)  # message, success, command, output
 
     def __init__(self, job: ProcessingJob):
         super().__init__()
@@ -55,7 +55,7 @@ class FFmpegWorker(QThread):
             elif self.job.job_type == 'rename':
                 self.bulk_rename()
         except Exception as e:
-            self.job_completed.emit(f"Error: {str(e)}", False)
+            self.job_completed.emit(f"An unexpected error occurred: {str(e)}", False, "", str(e))
 
     def _get_duration(self, file_path: Path) -> float:
         """Gets the duration of a media file in seconds using ffprobe."""
@@ -117,32 +117,31 @@ class FFmpegWorker(QThread):
             cmd = self.build_extract_audio_cmd(media_file)
 
             try:
-                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True)
-
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, universal_newlines=True)
+                output = ""
                 time_regex = re.compile(r"time=(\d{2}:\d{2}:\d{2}\.\d{2})")
 
-                for line in iter(process.stderr.readline, ""):
+                for line in iter(process.stdout.readline, ""):
                     if self.is_cancelled:
                         process.terminate()
                         break
-
+                    output += line
                     match = time_regex.search(line)
                     if match and duration > 0:
                         elapsed_time = self._time_str_to_seconds(match.group(1))
                         progress = int((elapsed_time / duration) * 100)
-                        # Scale progress to the overall job progress
                         overall_progress = int(((i + progress / 100) / total_files) * 100)
                         self.progress_updated.emit(overall_progress)
 
                 process.wait()
 
                 if process.returncode != 0 and not self.is_cancelled:
-                    error_message = f"Failed to extract from {media_file.filename}.\n"
-                    self.job_completed.emit(error_message, False)
+                    error_message = f"Failed to extract from {media_file.filename}."
+                    self.job_completed.emit(error_message, False, " ".join(cmd), output)
                     return
 
             except Exception as e:
-                self.job_completed.emit(f"An error occurred with {media_file.filename}: {str(e)}", False)
+                self.job_completed.emit(f"An error occurred with {media_file.filename}: {str(e)}", False, " ".join(cmd), str(e))
                 return
 
         if not self.is_cancelled:
@@ -252,14 +251,15 @@ class FFmpegWorker(QThread):
             cmd = self.build_merge_audio_cmd(video_file, matching_audio, matching_languages)
 
             try:
-                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True)
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, universal_newlines=True)
+                output = ""
                 time_regex = re.compile(r"time=(\d{2}:\d{2}:\d{2}\.\d{2})")
 
-                for line in iter(process.stderr.readline, ""):
+                for line in iter(process.stdout.readline, ""):
                     if self.is_cancelled:
                         process.terminate()
                         break
-
+                    output += line
                     match = time_regex.search(line)
                     if match and duration > 0:
                         elapsed_time = self._time_str_to_seconds(match.group(1))
@@ -270,11 +270,12 @@ class FFmpegWorker(QThread):
                 process.wait()
 
                 if process.returncode != 0 and not self.is_cancelled:
-                    self.job_completed.emit(f"Failed to merge audio for {video_file.filename}", False)
+                    error_message = f"Failed to merge audio for {video_file.filename}."
+                    self.job_completed.emit(error_message, False, " ".join(cmd), output)
                     return
 
             except Exception as e:
-                self.job_completed.emit(f"Error processing {video_file.filename}: {str(e)}", False)
+                self.job_completed.emit(f"Error processing {video_file.filename}: {str(e)}", False, " ".join(cmd), str(e))
                 return
 
         if not self.is_cancelled:
@@ -354,14 +355,15 @@ class FFmpegWorker(QThread):
             cmd = self.build_embed_subtitles_cmd(video_file, matching_subs, matching_languages)
 
             try:
-                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True)
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, universal_newlines=True)
+                output = ""
                 time_regex = re.compile(r"time=(\d{2}:\d{2}:\d{2}\.\d{2})")
 
-                for line in iter(process.stderr.readline, ""):
+                for line in iter(process.stdout.readline, ""):
                     if self.is_cancelled:
                         process.terminate()
                         break
-
+                    output += line
                     match = time_regex.search(line)
                     if match and duration > 0:
                         elapsed_time = self._time_str_to_seconds(match.group(1))
@@ -372,11 +374,12 @@ class FFmpegWorker(QThread):
                 process.wait()
 
                 if process.returncode != 0 and not self.is_cancelled:
-                    self.job_completed.emit(f"Failed to embed subtitles for {video_file.filename}", False)
+                    error_message = f"Failed to embed subtitles for {video_file.filename}."
+                    self.job_completed.emit(error_message, False, " ".join(cmd), output)
                     return
 
             except Exception as e:
-                self.job_completed.emit(f"Error processing {video_file.filename}: {str(e)}", False)
+                self.job_completed.emit(f"Error processing {video_file.filename}: {str(e)}", False, " ".join(cmd), str(e))
                 return
 
         if not self.is_cancelled:

@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (
     QPushButton, QListWidget, QListWidgetItem, QWidget, QVBoxLayout, QHBoxLayout,
-    QGroupBox, QTableWidget, QHeaderView, QFileDialog, QTableWidgetItem
+    QGroupBox, QTableWidget, QHeaderView, QFileDialog, QTableWidgetItem,
+    QDialog, QTextEdit, QLabel
 )
 from PyQt6.QtCore import (
     Qt, pyqtSignal
@@ -226,3 +227,26 @@ class FileListWidget(QWidget):
         is_empty = self.table.rowCount() == 0
         self.drop_widget.setVisible(is_empty)
         self.table.setVisible(not is_empty)
+
+
+class ErrorDialog(QDialog):
+    def __init__(self, title: str, message: str, details: str = ""):
+        super().__init__()
+        self.setWindowTitle(title)
+        self.setMinimumWidth(600)
+
+        layout = QVBoxLayout(self)
+
+        message_label = QLabel(message)
+        layout.addWidget(message_label)
+
+        if details:
+            self.details_text = QTextEdit()
+            self.details_text.setReadOnly(True)
+            self.details_text.setText(details)
+            self.details_text.setFont(QFont("Courier New", 9))
+            layout.addWidget(self.details_text)
+
+        close_button = MaterialButton("Close")
+        close_button.clicked.connect(self.accept)
+        layout.addWidget(close_button, alignment=Qt.AlignmentFlag.AlignRight)

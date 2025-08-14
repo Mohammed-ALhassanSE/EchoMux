@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QTextEdit, QComboBox, QMenu
 )
 
-from echomux.ui_components import FileListWidget, MaterialButton
+from echomux.ui_components import ErrorDialog, FileListWidget, MaterialButton
 from echomux.utils import analyze_media_file, get_languages, open_file_location
 from echomux.worker import ProcessingJob, FFmpegWorker, MediaFile
 
@@ -256,7 +256,7 @@ class AudioMergingTab(QWidget):
         self.cancel_btn.setEnabled(True)
         self.worker.start()
 
-    def on_job_completed(self, message, success):
+    def on_job_completed(self, message, success, command="", output=""):
         try:
             self.cancel_btn.clicked.disconnect(self.worker.cancel)
         except TypeError:
@@ -267,4 +267,10 @@ class AudioMergingTab(QWidget):
         if success:
             QMessageBox.information(self, "Success", message)
         else:
-            QMessageBox.critical(self, "Error", message)
+            details = ""
+            if command:
+                details += f"Command:\n{command}\n\n"
+            if output:
+                details += f"Output:\n{output}"
+            dialog = ErrorDialog("Error", message, details)
+            dialog.exec()
