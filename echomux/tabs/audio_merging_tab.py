@@ -1,19 +1,15 @@
 from pathlib import Path
 from typing import List
 
-from pathlib import Path
-from typing import List
-
-from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QProgressBar,
     QFileDialog, QCheckBox, QGroupBox, QMessageBox, QGridLayout, QScrollArea,
-    QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QMenu
+    QTextEdit, QComboBox, QMenu
 )
 
-from echomux.ui_components import FileDropWidget, MaterialButton
-from echomux.utils import process_paths, analyze_media_file, get_languages, open_file_location
+from echomux.ui_components import FileListWidget, MaterialButton
+from echomux.utils import analyze_media_file, get_languages, open_file_location
 from echomux.worker import ProcessingJob, FFmpegWorker, MediaFile
 
 
@@ -35,60 +31,27 @@ class AudioMergingTab(QWidget):
         scroll_area.setWidget(content_widget)
         layout = QVBoxLayout(content_widget)
 
-        # Video files section
-        video_group = QGroupBox("Video Files")
-        video_layout = QVBoxLayout(video_group)
-        self.video_table = QTableWidget()
-        self.video_table.setColumnCount(3)
-        self.video_table.setHorizontalHeaderLabels(["Filename", "Duration", "Audio Tracks"])
-        self.video_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.video_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.video_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.video_table.customContextMenuRequested.connect(self._show_video_context_menu)
-        self.video_drop_widget = FileDropWidget(allowed_extensions=['.mp4', '.mkv', '.avi', '.mov', '.m4v'])
-        self.video_drop_widget.files_dropped.connect(self.on_video_files_added)
-        video_layout.addWidget(self.video_drop_widget)
-        video_layout.addWidget(self.video_table)
-        video_button_layout = QHBoxLayout()
-        self.add_videos_btn = MaterialButton("Add Video Files")
-        self.add_videos_btn.clicked.connect(self.add_video_files)
-        self.add_video_folder_btn = MaterialButton("Add Folder")
-        self.add_video_folder_btn.clicked.connect(self.add_video_folder)
-        self.clear_videos_btn = MaterialButton("Clear Videos")
-        self.clear_videos_btn.clicked.connect(self.clear_video_files)
-        video_button_layout.addWidget(self.add_videos_btn)
-        video_button_layout.addWidget(self.add_video_folder_btn)
-        video_button_layout.addWidget(self.clear_videos_btn)
-        video_button_layout.addStretch()
-        video_layout.addLayout(video_button_layout)
-        layout.addWidget(video_group)
+        # Video files widget
+        self.video_files_widget = FileListWidget(
+            title="Video Files",
+            allowed_extensions=['.mp4', '.mkv', '.avi', '.mov', '.m4v'],
+            table_headers=["Filename", "Duration", "Audio Tracks"]
+        )
+        self.video_files_widget.files_added.connect(self._on_video_files_added)
+        self.video_files_widget.files_cleared.connect(self._clear_video_files)
+        self.video_files_widget.table.customContextMenuRequested.connect(self._show_video_context_menu)
+        layout.addWidget(self.video_files_widget)
 
-        # Audio files section
-        audio_group = QGroupBox("Audio Files to Merge")
-        audio_layout = QVBoxLayout(audio_group)
-        self.audio_table = QTableWidget()
-        self.audio_table.setColumnCount(2)
-        self.audio_table.setHorizontalHeaderLabels(["Audio File", "Language"])
-        self.audio_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.audio_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.audio_table.customContextMenuRequested.connect(self._show_audio_context_menu)
-        self.audio_drop_widget = FileDropWidget(allowed_extensions=['.aac', '.mp3', '.flac', '.ogg', '.wav', '.m4a'])
-        self.audio_drop_widget.files_dropped.connect(self.on_audio_files_added)
-        audio_layout.addWidget(self.audio_drop_widget)
-        audio_layout.addWidget(self.audio_table)
-        audio_button_layout = QHBoxLayout()
-        self.add_audio_btn = MaterialButton("Add Audio Files")
-        self.add_audio_btn.clicked.connect(self.add_audio_files)
-        self.add_audio_folder_btn = MaterialButton("Add Folder")
-        self.add_audio_folder_btn.clicked.connect(self.add_audio_folder)
-        self.clear_audio_btn = MaterialButton("Clear Audio")
-        self.clear_audio_btn.clicked.connect(self.clear_audio_files)
-        audio_button_layout.addWidget(self.add_audio_btn)
-        audio_button_layout.addWidget(self.add_audio_folder_btn)
-        audio_button_layout.addStretch()
-        audio_button_layout.addWidget(self.clear_audio_btn)
-        audio_layout.addLayout(audio_button_layout)
-        layout.addWidget(audio_group)
+        # Audio files widget
+        self.audio_files_widget = FileListWidget(
+            title="Audio Files to Merge",
+            allowed_extensions=['.aac', '.mp3', '.flac', '.ogg', '.wav', '.m4a'],
+            table_headers=["Audio File", "Language"]
+        )
+        self.audio_files_widget.files_added.connect(self._on_audio_files_added)
+        self.audio_files_widget.files_cleared.connect(self._clear_audio_files)
+        self.audio_files_widget.table.customContextMenuRequested.connect(self._show_audio_context_menu)
+        layout.addWidget(self.audio_files_widget)
 
         # Settings section
         settings_group = QGroupBox("Merge Settings")
@@ -138,76 +101,55 @@ class AudioMergingTab(QWidget):
         layout.addLayout(control_layout)
         layout.addStretch()
 
-        self.video_table.setVisible(False)
-        self.audio_table.setVisible(False)
-
     def _show_video_context_menu(self, position):
-        self._show_context_menu_for_table(self.video_table, position, self._remove_selected_videos, self._open_selected_video_location)
+        self._show_context_menu_for_table(self.video_files_widget.table, position, self._remove_selected_videos, self._open_selected_video_location)
 
     def _show_audio_context_menu(self, position):
-        self._show_context_menu_for_table(self.audio_table, position, self._remove_selected_audio, self._open_selected_audio_location)
+        self._show_context_menu_for_table(self.audio_files_widget.table, position, self._remove_selected_audio, self._open_selected_audio_location)
 
     def _show_context_menu_for_table(self, table, position, remove_callback, open_callback):
         if not table.selectedItems():
             return
-
         menu = QMenu()
         remove_action = menu.addAction("Remove Selected")
         open_loc_action = menu.addAction("Open File Location")
-
         action = menu.exec(table.mapToGlobal(position))
-
         if action == remove_action:
             remove_callback()
         elif action == open_loc_action:
             open_callback()
 
     def _remove_selected_videos(self):
-        selected_rows = sorted(list(set(item.row() for item in self.video_table.selectedItems())), reverse=True)
+        selected_rows = sorted(list(set(item.row() for item in self.video_files_widget.table.selectedItems())), reverse=True)
         for row in selected_rows:
             self.video_files.pop(row)
-            self.video_table.removeRow(row)
-        if self.video_table.rowCount() == 0:
-            self.video_drop_widget.setVisible(True)
-            self.video_table.setVisible(False)
+            self.video_files_widget.table.removeRow(row)
+        self.video_files_widget.update_visibility()
         self.update_preview()
 
     def _remove_selected_audio(self):
-        selected_rows = sorted(list(set(item.row() for item in self.audio_table.selectedItems())), reverse=True)
+        selected_rows = sorted(list(set(item.row() for item in self.audio_files_widget.table.selectedItems())), reverse=True)
         for row in selected_rows:
             self.audio_files_data.pop(row)
-            self.audio_table.removeRow(row)
-        if self.audio_table.rowCount() == 0:
-            self.audio_drop_widget.setVisible(True)
-            self.audio_table.setVisible(False)
+            self.audio_files_widget.table.removeRow(row)
+        self.audio_files_widget.update_visibility()
         self.update_preview()
 
     def _open_selected_video_location(self):
-        self._open_location_for_table(self.video_table, self.video_files, is_media_file=True)
+        self._open_location_for_table(self.video_files_widget.table, self.video_files, is_media_file=True)
 
     def _open_selected_audio_location(self):
-        self._open_location_for_table(self.audio_table, self.audio_files_data, is_media_file=False)
+        self._open_location_for_table(self.audio_files_widget.table, self.audio_files_data, is_media_file=False)
 
     def _open_location_for_table(self, table, data_list, is_media_file):
         selected_rows = list(set(item.row() for item in table.selectedItems()))
         if not selected_rows:
             return
-
         item = data_list[selected_rows[0]]
         path = item.path if is_media_file else item[0]
         open_file_location(str(path))
 
-    def add_video_files(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "Select Video Files", "", "Video Files (*.mp4 *.mkv *.avi *.mov *.m4v)")
-        if files:
-            self.on_video_files_added(files)
-
-    def add_video_folder(self):
-        directory = QFileDialog.getExistingDirectory(self, "Select Folder")
-        if directory:
-            self.on_video_files_added(process_paths([directory], ['.mp4', '.mkv', '.avi', '.mov', '.m4v']))
-
-    def on_video_files_added(self, files: List[str]):
+    def _on_video_files_added(self, files: List[str]):
         for file_path in files:
             if any(mf.path == Path(file_path) for mf in self.video_files):
                 continue
@@ -224,60 +166,31 @@ class AudioMergingTab(QWidget):
                 except (ValueError, TypeError):
                     pass
             self.video_files.append(media_file)
-            row_pos = self.video_table.rowCount()
-            self.video_table.insertRow(row_pos)
-            self.video_table.setItem(row_pos, 0, QTableWidgetItem(media_file.filename))
-            self.video_table.setItem(row_pos, 1, QTableWidgetItem(duration_str))
-            self.video_table.setItem(row_pos, 2, QTableWidgetItem(audio_info_str))
-
-        self.video_drop_widget.setVisible(self.video_table.rowCount() == 0)
-        self.video_table.setVisible(self.video_table.rowCount() > 0)
+            self.video_files_widget.add_row([media_file.filename, duration_str, audio_info_str])
         self.update_preview()
 
-    def clear_video_files(self):
-        self.video_table.setRowCount(0)
-        self.video_files = []
-        self.video_drop_widget.setVisible(True)
-        self.video_table.setVisible(False)
+    def _clear_video_files(self):
+        self.video_files.clear()
         self.update_preview()
 
-    def add_audio_files(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "Select Audio Files", "", "Audio Files (*.aac *.mp3 *.flac *.ogg *.wav *.m4a)")
-        if files:
-            self.on_audio_files_added(files)
-
-    def add_audio_folder(self):
-        directory = QFileDialog.getExistingDirectory(self, "Select Folder")
-        if directory:
-            self.on_audio_files_added(process_paths([directory], ['.aac', '.mp3', '.flac', '.ogg', '.wav', '.m4a']))
-
-    def on_audio_files_added(self, files: List[str]):
+    def _on_audio_files_added(self, files: List[str]):
         for file_path in files:
             if any(af[0] == file_path for af in self.audio_files_data):
                 continue
-            row_pos = self.audio_table.rowCount()
-            self.audio_table.insertRow(row_pos)
-            self.audio_table.setItem(row_pos, 0, QTableWidgetItem(Path(file_path).name))
             lang_combo = QComboBox()
             for name, code in self.languages:
                 lang_combo.addItem(f"{name} ({code})", code)
-            self.audio_table.setCellWidget(row_pos, 1, lang_combo)
             self.audio_files_data.append((file_path, lang_combo))
-        self.audio_drop_widget.setVisible(self.audio_table.rowCount() == 0)
-        self.audio_table.setVisible(self.audio_table.rowCount() > 0)
+            self.audio_files_widget.add_row([Path(file_path).name, lang_combo])
         self.update_preview()
 
-    def clear_audio_files(self):
-        self.audio_table.setRowCount(0)
-        self.audio_files_data = []
-        self.audio_drop_widget.setVisible(True)
-        self.audio_table.setVisible(False)
+    def _clear_audio_files(self):
+        self.audio_files_data.clear()
         self.update_preview()
 
     def refresh_language_dropdowns(self):
         self.languages = get_languages()
-        for i in range(self.audio_table.rowCount()):
-            combo = self.audio_table.cellWidget(i, 1)
+        for _, combo in self.audio_files_data:
             if combo:
                 current_code = combo.currentData()
                 combo.clear()
@@ -322,10 +235,8 @@ class AudioMergingTab(QWidget):
         if not self.output_path.text():
             QMessageBox.warning(self, "Warning", "Please select an output directory.")
             return
-
         audio_files = [af[0] for af in self.audio_files_data]
         languages = [af[1].currentData() for af in self.audio_files_data]
-
         job = ProcessingJob(
             input_files=self.video_files,
             output_directory=Path(self.output_path.text()),
@@ -341,7 +252,6 @@ class AudioMergingTab(QWidget):
         self.worker.status_updated.connect(self.status_label.setText)
         self.worker.job_completed.connect(self.on_job_completed)
         self.cancel_btn.clicked.connect(self.worker.cancel)
-
         self.merge_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
         self.worker.start()
@@ -351,7 +261,6 @@ class AudioMergingTab(QWidget):
             self.cancel_btn.clicked.disconnect(self.worker.cancel)
         except TypeError:
             pass
-
         self.merge_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
         self.status_label.setText(message)
