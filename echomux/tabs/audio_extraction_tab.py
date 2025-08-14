@@ -56,11 +56,8 @@ class AudioExtractionTab(QWidget):
         self.drop_widget = FileDropWidget(allowed_extensions=['.mp4', '.mkv', '.avi', '.mov', '.m4v'])
         self.drop_widget.files_dropped.connect(self.on_files_added)
 
-        drop_layout = QVBoxLayout(self.drop_widget)
-        drop_layout.addWidget(self.file_table)
-        drop_layout.setContentsMargins(0,0,0,0)
-
         input_layout.addWidget(self.drop_widget)
+        input_layout.addWidget(self.file_table)
 
         button_layout = QHBoxLayout()
         self.add_files_btn = MaterialButton("Add Files")
