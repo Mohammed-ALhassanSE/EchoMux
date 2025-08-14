@@ -182,11 +182,15 @@ class FFmpegWorker(QThread):
             self.status_updated.emit(f"({i+1}/{total_files}) Merging audio into {video_file.filename}...")
 
             audio_files = self.job.settings.get('audio_files', [])
-            matching_audio = [
-                audio_path for audio_path in audio_files
-                if video_file.path.stem.lower() in Path(audio_path).stem.lower() or
-                   Path(audio_path).stem.lower() in video_file.path.stem.lower()
-            ]
+            languages = self.job.settings.get('languages', [])
+
+            matching_audio = []
+            matching_languages = []
+            for audio_path, lang in zip(audio_files, languages):
+                if video_file.path.stem.lower() in Path(audio_path).stem.lower() or \
+                   Path(audio_path).stem.lower() in video_file.path.stem.lower():
+                    matching_audio.append(audio_path)
+                    matching_languages.append(lang)
 
             if not matching_audio:
                 self.status_updated.emit(f"No matching audio found for {video_file.filename}")
@@ -196,7 +200,7 @@ class FFmpegWorker(QThread):
             if duration == 0:
                 self.status_updated.emit(f"Could not get duration for {video_file.filename}. Progress will not be shown.")
 
-            cmd = self._build_merge_audio_cmd(video_file, matching_audio)
+            cmd = self.build_merge_audio_cmd(video_file, matching_audio, matching_languages)
 
             try:
                 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True)
@@ -280,11 +284,15 @@ class FFmpegWorker(QThread):
             self.status_updated.emit(f"({i+1}/{total_files}) Embedding subtitles in {video_file.filename}...")
 
             subtitle_files = self.job.settings.get('subtitle_files', [])
-            matching_subs = [
-                sub_path for sub_path in subtitle_files
-                if video_file.path.stem.lower() in Path(sub_path).stem.lower() or
-                   Path(sub_path).stem.lower() in video_file.path.stem.lower()
-            ]
+            languages = self.job.settings.get('languages', [])
+
+            matching_subs = []
+            matching_languages = []
+            for sub_path, lang in zip(subtitle_files, languages):
+                if video_file.path.stem.lower() in Path(sub_path).stem.lower() or \
+                   Path(sub_path).stem.lower() in video_file.path.stem.lower():
+                    matching_subs.append(sub_path)
+                    matching_languages.append(lang)
 
             if not matching_subs:
                 self.status_updated.emit(f"No matching subtitles found for {video_file.filename}")
@@ -294,7 +302,7 @@ class FFmpegWorker(QThread):
             if duration == 0:
                 self.status_updated.emit(f"Could not get duration for {video_file.filename}. Progress will not be shown.")
 
-            cmd = self._build_embed_subtitles_cmd(video_file, matching_subs)
+            cmd = self.build_embed_subtitles_cmd(video_file, matching_subs, matching_languages)
 
             try:
                 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True)

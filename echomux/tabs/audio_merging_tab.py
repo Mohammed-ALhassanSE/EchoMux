@@ -47,10 +47,8 @@ class AudioMergingTab(QWidget):
         self.video_table.customContextMenuRequested.connect(self._show_video_context_menu)
         self.video_drop_widget = FileDropWidget(allowed_extensions=['.mp4', '.mkv', '.avi', '.mov', '.m4v'])
         self.video_drop_widget.files_dropped.connect(self.on_video_files_added)
-        drop_layout = QVBoxLayout(self.video_drop_widget)
-        drop_layout.addWidget(self.video_table)
-        drop_layout.setContentsMargins(0,0,0,0)
         video_layout.addWidget(self.video_drop_widget)
+        video_layout.addWidget(self.video_table)
         video_button_layout = QHBoxLayout()
         self.add_videos_btn = MaterialButton("Add Video Files")
         self.add_videos_btn.clicked.connect(self.add_video_files)
@@ -74,6 +72,9 @@ class AudioMergingTab(QWidget):
         self.audio_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.audio_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.audio_table.customContextMenuRequested.connect(self._show_audio_context_menu)
+        self.audio_drop_widget = FileDropWidget(allowed_extensions=['.aac', '.mp3', '.flac', '.ogg', '.wav', '.m4a'])
+        self.audio_drop_widget.files_dropped.connect(self.on_audio_files_added)
+        audio_layout.addWidget(self.audio_drop_widget)
         audio_layout.addWidget(self.audio_table)
         audio_button_layout = QHBoxLayout()
         self.add_audio_btn = MaterialButton("Add Audio Files")
@@ -177,6 +178,7 @@ class AudioMergingTab(QWidget):
             self.audio_files_data.pop(row)
             self.audio_table.removeRow(row)
         if self.audio_table.rowCount() == 0:
+            self.audio_drop_widget.setVisible(True)
             self.audio_table.setVisible(False)
         self.update_preview()
 
@@ -261,12 +263,14 @@ class AudioMergingTab(QWidget):
                 lang_combo.addItem(f"{name} ({code})", code)
             self.audio_table.setCellWidget(row_pos, 1, lang_combo)
             self.audio_files_data.append((file_path, lang_combo))
+        self.audio_drop_widget.setVisible(self.audio_table.rowCount() == 0)
         self.audio_table.setVisible(self.audio_table.rowCount() > 0)
         self.update_preview()
 
     def clear_audio_files(self):
         self.audio_table.setRowCount(0)
         self.audio_files_data = []
+        self.audio_drop_widget.setVisible(True)
         self.audio_table.setVisible(False)
         self.update_preview()
 
